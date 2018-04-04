@@ -1,4 +1,4 @@
-function oi = compute_orientationindex( angles, rates )
+function [oi,di] = compute_orientationindex( angles, rates )
 
 % COMPUTE_ORIENTATIONINDEX
 %     DI = COMPUTE_ORIENTATIONINDEX( ANGLES, RATES )
