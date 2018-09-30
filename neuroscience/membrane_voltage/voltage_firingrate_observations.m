@@ -1,7 +1,8 @@
-function [v, fr, stimid] = voltage_firingrate_observations(t, vm, spiketimes, varargin)
+function [v, fr, stimid, timepoints, vm_baselinesubtracted, exactbintime] = voltage_firingrate_observations(t, vm, spiketimes, varargin)
 % VOLTAGE_FIRINGRATE_OBSERVATIONS - compile a list of voltage measurements and firing rate measurements
 %
-% [V,FR,STIMID] = VOLTAGE_FIRINGRATE_OBSERVATIONS(T, VM, SPIKETIMES, ...)
+% [V,FR,STIMID,TIMEPOINTS,VM_BASELINESUBECTRACTED,EXACTBINTIME] = ...
+%          VOLTAGE_FIRINGRATE_OBSERVATIONS(T, VM, SPIKETIMES, ...)
 %
 % Compiles a list of membrane voltage measurements V and firing rate measurements FR given the
 % following inputs: 
@@ -9,7 +10,11 @@ function [v, fr, stimid] = voltage_firingrate_observations(t, vm, spiketimes, va
 %    VM   is a vector of samples of absolute voltage measurement, should have spikes removed
 %    SPIKETIMES is a vector of spike times (in units of t, should be seconds)
 %
+% V and FR are paired, binned observations of voltage and firing rate,
+% and TIMEPOINTS are the mid-point values of the bins in time.
 % STIMID is a vector containing the stimulus id of each V,FR pair.
+% VM_BASELINESUBTRACTED is the voltage waveform with baseline values subtracted.
+% EXACTBINTIME is the time interval of each bin exactly, which varies depending upon the sampling rate of Vm.
 %
 % This function can be modified by additional parameter name/value pairs:
 % Parameter name (default value)  | Description
@@ -30,8 +35,6 @@ function [v, fr, stimid] = voltage_firingrate_observations(t, vm, spiketimes, va
 %                                 |    for patch recordings.)
 
 
-error('untested, still in development');
-
 binsize = 0.030; 
 fr_smooth = [];
 stim_onsetoffsetid = [];
@@ -45,11 +48,13 @@ t = t(:)'; % row vector
 
 v = [];
 fr = [];
-stimids = [];
+stimid = [];
+timepoints = [];
 
 dt = t(2)-t(1);
 bin_samples = round(binsize/dt); % size of the bins in terms of samples
-if mod(bin_samples,2), bin_samples = bin_samples+1; end; % make sure it is odd
+if ~mod(bin_samples,2), bin_samples = bin_samples+1; end; % make sure it is odd
+exactbintime = bin_samples * dt;
 
   % Step 1: check validity of inputs before doing work
 
@@ -59,10 +64,13 @@ if isempty(stim_onsetoffsetid),
 	end;
 
 	if ~isempty(vm_baseline_correct),
-		stim_onsetoffsetid = [ t(1)+vm+baseline_correct+dt t(end) 1 ];
+		stim_onsetoffsetid = [ t(1)+baseline_correct+dt t(end) 1 ];
 	else,
 		stim_onsetoffsetid = [ t(1) t(end) 1 ];
 	end
+	median_ISI = 0;
+else,
+	median_ISI = median(diff(stim_onsetoffsetid(:,1)));
 end
 
   % Step 2: prepare the firing rate information, smoothing with Gaussian if needed
@@ -83,15 +91,15 @@ if ~isempty(vm_baseline_correct),
 
 	for i=1:size(stim_onsetoffsetid,1), % for each stimulus
 		sample_start = point2samplelabel(stim_onsetoffsetid(i,1),dt,t(1));
-		sample_stop = point2samplelabel(stim_onsetoffsetid(i,2),dt,t(1));
-
-		if ~isempty(vm_baseline_correct),
-			t_baseline = sample_start - vm_baseline_correct_samples;
-			baseline = mean(vm(t_baseline:sample_start-1));
+		if i<size(stim_onsetoffsetid,1),
+			sample_stop = point2samplelabel(stim_onsetoffsetid(i+1,1)-vm_baseline_correct-dt,dt,t(1));
 		else,
-			baseline = 0;
+			sample_stop = numel(vm);
 		end
-		vm(sample_start:sample_stop) = vm(sample_start:sample_stop) - baseline;
+
+		s_baseline = sample_start - vm_baseline_correct_samples;
+		baseline = mean(vm(s_baseline:sample_start-1));
+		vm(s_baseline:sample_stop) = vm(s_baseline:sample_stop) - baseline;
 	end
 end
 
@@ -110,30 +118,40 @@ stimids = unique(stim_onsetoffsetid(:,3));
 for s = 1:numel(stimids),
 	v_trials = [];
 	f_trials = [];
+	t_trials = [];
 	do = find(stim_onsetoffsetid(:,3)==stimids(s));
 	for o=1:numel(do),
-		sample_start = point2samplelabel(stim_onsetoffsetid(i,1),dt,t(1));
-		sample_stop = point2samplelabel(stim_onsetoffsetid(i,2),dt,t(1));
+		sample_start = point2samplelabel(stim_onsetoffsetid(do(o),1),dt,t(1));
+		if do(o)<numel(stimids),
+			sample_stop = point2samplelabel(stim_onsetoffsetid(do(o)+1,1)-dt-vm_baseline_correct,dt,t(1));
+		else,
+			sample_stop = min(point2samplelabel(stim_onsetoffsetid(do(o),2)+median_ISI,dt,t(1)),numel(vm));
+		end
+		t_here = t(sample_start+(bin_samples-1)/2:bin_samples:sample_stop-(bin_samples-1)/2);
 		v_here = vm(sample_start+(bin_samples-1)/2:bin_samples:sample_stop-(bin_samples-1)/2);
 		fr_here = spikes(sample_start+(bin_samples-1)/2:bin_samples:sample_stop-(bin_samples-1)/2);
 
 		if dotrialaverage,
 			v_trials(end+1,:) = v_here;
 			fr_trials(end+1,:) = f_here;
+			t_trials(end+1,:) = t_here;
 		else,
 			% add the entries now
-			v = cat(2,v,v_here(:));
-			fr = cat(2,fr,fr_here(:));
-			stimid = cat(2,stimid,stimids(s)*ones(numel(v_here),1));
+			v = cat(1,v,v_here(:));
+			fr = cat(1,fr,fr_here(:));
+			timepoints = cat(1,timepoints,t_here(:));
+			stimid = cat(1,stimid,stimids(s)*ones(numel(v_here),1));
 		end
 	end
 	if dotrialaverage,
 		v_here = mean(v_trials,1);
 		fr_here = mean(fr_trials,1);
-		v = cat(2,v,v_here(:));
-		fr = cat(2,fr,fr_here(:));
-		stimid = cat(2,stimid,stimids(s)*ones(numel(v_here),1));
+		t_here = mean(tr_trials,1);
+		v = cat(1,v,v_here(:));
+		fr = cat(1,fr,fr_here(:));
+		timepoints = cat(1,timeopints,t_here(:));
+		stimid = cat(1,stimid,stimids(s)*ones(numel(v_here),1));
 	end
 end
 
-
+vm_baselinesubtracted = vm;
