@@ -1,4 +1,4 @@
-function [h,htext] = plot_voltage_firingrate_observations(v, fr, stimid, timepoints, vm_baselinesubtracted, t, vm, spiketimes, varargin)
+function [h,htext] = plot_voltage_firingrate_observations(v, fr, stimid, timepoints, vm_baselinesubtracted, t, vm, varargin)
 % PLOT_VOLTAGE_FIRINGRATE_OBSERVATIONS - plot a list of voltage-firing rate observations against real data
 %
 % [H,HTEXT] = PLOT_VOLTAGE_FIRINGRATE_OBSERVATIONS(V, FR, STIMID, TIMEPOINTS, VM_BASELINESUBTRACTED, T, VM, SPIKETIMES, ...)
@@ -9,7 +9,7 @@ function [h,htext] = plot_voltage_firingrate_observations(v, fr, stimid, timepoi
 %      STIMID - stimulus IDs
 %  TIMEPOINTS - Timepoints that are averaged together
 %           T - time points of raw data
-%          VM - voltage measurements
+%          VM - voltage measurements of raw data
 %  SPIKETIMES - time of spiking events
 % 
 % This function can be modified by additional parameter name/value pairs:
@@ -24,11 +24,6 @@ function [h,htext] = plot_voltage_firingrate_observations(v, fr, stimid, timepoi
 %                                 |    where the times are in units of 't' (seconds)
 % dotrialaverage (0)              | If 1, perform a trial-averaging of the spike times
 %                                 |    and voltage waveform
-% vm_baseline_correct ([])        | If non-empty, perform a baseline correction of the
-%                                 |    voltage waveform using this much pre-stimulus 
-%                                 |    time (units of t, should be seconds).
-%                                 |    (Recommended for sharp electrode recordings, not receommended
-%                                 |    for patch recordings.)
 %
 % See also: VOLTAGE_FIRINGRATE_OBSERVATIONS
 
@@ -37,7 +32,6 @@ binsize = 0.030;
 fr_smooth = [];
 stim_onsetoffsetid = [];
 dotrialaverage = 0;
-vm_baseline_correct = [];
 
 assign(varargin{:});
 
@@ -99,6 +93,9 @@ h = cat(1,h(:),h_here(:));
 h_here = plot(xlocs_spikes, ylocs_spikes, ['rx'] );
 h = cat(1,h(:),h_here(:));
 
+ylabel('Voltage (mV)');
+xlabel('Time (s)');
+title(['''o'' means no spikes in that bin, ''x'' means spikes in that bin']);
 [newh,newhtext]=plot_stimulus_timeseries(mean(v(inds)),stim_onsetoffsetid(:,1),...
 		stim_onsetoffsetid(:,2),'stimid',stim_onsetoffsetid(:,3));
 
@@ -109,5 +106,17 @@ box off
 h = cat(1,h(:),newh(:));
 htext = newhtext;
 
-return;
+figure;
+[SI,INDS] = stepfunc(timepoints(:)'-0.5*binsize,fr(:)',t(:)');
+plot(t(:),SI(:),'m');
+xlabel('Time (s)');
+ylabel('Firing rate(spikes/sec)');
+title('Firing rate binned');
 
+figure;
+
+[SI,INDS] = stepfunc(timepoints(:)'-0.5*binsize,v(:)',t(:)');
+plot(t(:),SI(:),'m');
+xlabel('Time (s)');
+ylabel('Membrane potential (V)');
+title('Membrane potential binned');

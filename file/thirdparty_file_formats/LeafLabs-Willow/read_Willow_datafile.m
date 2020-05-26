@@ -7,19 +7,20 @@ function [data, total_samples, total_time] = read_Willow_datafile(filename, head
 % this is for data produced with the new 30 kHz gpio firmware
 % FILENAME is a string, the relative path to the H5 Willow file
 % CHANNEL_TYPE = 'time', 'amp', 'aux', 'supply', 'temp', 'din'
-% CHANNEL_NUMBERS is an array of channel numbers, e.g. 1:64
+% CHANNEL_NUMBERS is an array of channel numbers, e.g. 1:64. Available channels in Willow are 1..1024, and all
+% channels are always acquired.
 % T0,T1 is an inclusive time range in seconds, relative to the beginning of the file
 % everything is 1-indexed because matlab
 % channel_type = "adc" is not supported (returns error), because there are no adc converters
 % channel_type = "dout" is not supported (returns error), as any output pins are rolled into GPIO (din)
 %
 % example usage:
-%  data = read_Willow_datafile('snapshot_30kgpio.h5', 'time', 1, 0, 0.1);
-%  data = read_Willow_datafile('snapshot_30kgpio.h5', 'amp', 129:256, 0, 0.1);
-%  data = read_Willow_datafile('snapshot_30kgpio.h5', 'aux', 1:12, 0, 0.1); % 2khz
-%  data = read_Willow_datafile('snapshot_30kgpio.h5', 'supply', 1:4, 0, 0.1); % 2khz
-%  data = read_Willow_datafile('snapshot_30kgpio.h5', 'temp', 1:4, 0, 0.1); % 2khz
-%  data = read_Willow_datafile('snapshot_30kgpio.h5', 'din', [1,3,7], 0, 0.1);
+%  data = read_Willow_datafile('snapshot_30kgpio.h5', [], 'time', 1, 0, 0.1);
+%  data = read_Willow_datafile('snapshot_30kgpio.h5', [], 'amp', 129:256, 0, 0.1);
+%  data = read_Willow_datafile('snapshot_30kgpio.h5', [], 'aux', 1:12, 0, 0.1); % 2khz
+%  data = read_Willow_datafile('snapshot_30kgpio.h5', [], 'supply', 1:4, 0, 0.1); % 2khz
+%  data = read_Willow_datafile('snapshot_30kgpio.h5', [], 'temp', 1:4, 0, 0.1); % 2khz
+%  data = read_Willow_datafile('snapshot_30kgpio.h5', [], 'din', [1,3,7], 0, 0.1);
 %
 % CKC 20160209
 % SDV 20160211 - minor modifications, added header information

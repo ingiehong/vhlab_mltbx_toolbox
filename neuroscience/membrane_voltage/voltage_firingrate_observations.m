@@ -1,7 +1,7 @@
-function [v, fr, stimid, timepoints, vm_baselinesubtracted, exactbintime] = voltage_firingrate_observations(t, vm, spiketimes, varargin)
+function [v, fr, stimid, timepoints, vm_baselinesubtracted, exactbintime, subtracted_value] = voltage_firingrate_observations(t, vm, spiketimes, varargin)
 % VOLTAGE_FIRINGRATE_OBSERVATIONS - compile a list of voltage measurements and firing rate measurements
 %
-% [V,FR,STIMID,TIMEPOINTS,VM_BASELINESUBECTRACTED,EXACTBINTIME] = ...
+% [V,FR,STIMID,TIMEPOINTS,VM_BASELINESUBECTRACTED,EXACTBINTIME, SUBTRACTED_VALUE] = ...
 %          VOLTAGE_FIRINGRATE_OBSERVATIONS(T, VM, SPIKETIMES, ...)
 %
 % Compiles a list of membrane voltage measurements V and firing rate measurements FR given the
@@ -33,6 +33,8 @@ function [v, fr, stimid, timepoints, vm_baselinesubtracted, exactbintime] = volt
 %                                 |    time (units of t, should be seconds).
 %                                 |    (Recommended for sharp electrode recordings, not receommended
 %                                 |    for patch recordings.)
+% vm_baseline_correct_func        | The function to use for correcting baseline (usually 'median' or 'mean').
+%             ('median')
 
 
 binsize = 0.030; 
@@ -40,6 +42,7 @@ fr_smooth = [];
 stim_onsetoffsetid = [];
 dotrialaverage = 0;
 vm_baseline_correct = [];
+vm_baseline_correct_func = 'median';
 
 assign(varargin{:});
 
@@ -60,7 +63,7 @@ exactbintime = bin_samples * dt;
 
 if isempty(stim_onsetoffsetid),
 	if ~dotrialaverage
-		error(['No stimulus data was specified, but trial averaging was requested. These inputs are not conguent.']);
+		error(['No stimulus data was specified, but trial averaging was requested. These inputs are not congruent.']);
 	end;
 
 	if ~isempty(vm_baseline_correct),
@@ -71,6 +74,9 @@ if isempty(stim_onsetoffsetid),
 	median_ISI = 0;
 else,
 	median_ISI = median(diff(stim_onsetoffsetid(:,1)));
+	% are all stimuli in the time bounds? If not, jettison them
+	inbounds = find(stim_onsetoffsetid(:,1)-vm_baseline_correct-dt>=t(1) & stim_onsetoffsetid(:,2)<=t(end));
+	stim_onsetoffsetid = stim_onsetoffsetid(inbounds,:);
 end
 
   % Step 2: prepare the firing rate information, smoothing with Gaussian if needed
@@ -87,20 +93,24 @@ end
   % Step 3: correct baseline if needed
 
 if ~isempty(vm_baseline_correct),
+	vm_out = nan(size(vm));
 	vm_baseline_correct_samples = max([1 round(vm_baseline_correct/dt)]); % make sure at least one sample
 
 	for i=1:size(stim_onsetoffsetid,1), % for each stimulus
 		sample_start = point2samplelabel(stim_onsetoffsetid(i,1),dt,t(1));
 		if i<size(stim_onsetoffsetid,1),
-			sample_stop = point2samplelabel(stim_onsetoffsetid(i+1,1)-vm_baseline_correct-dt,dt,t(1));
+			% sample_stop should be right before the start of the baselin correction period for the next stimulus
+			sample_stop = point2samplelabel(stim_onsetoffsetid(i+1,1),dt,t(1)) - vm_baseline_correct_samples - 1;
 		else,
 			sample_stop = numel(vm);
 		end
+		%sample_stop = point2samplelabel(stim_onsetoffsetid(i,2),dt,t(1));
 
 		s_baseline = sample_start - vm_baseline_correct_samples;
-		baseline = mean(vm(s_baseline:sample_start-1));
-		vm(s_baseline:sample_stop) = vm(s_baseline:sample_stop) - baseline;
+		baseline = feval(vm_baseline_correct_func, vm(s_baseline:sample_start-1));
+		vm_out(s_baseline:sample_stop) = vm(s_baseline:sample_stop) - baseline;
 	end
+	vm = vm_out;
 end
 
   % Step 4: smooth the data
@@ -122,7 +132,7 @@ for s = 1:numel(stimids),
 	do = find(stim_onsetoffsetid(:,3)==stimids(s));
 	for o=1:numel(do),
 		sample_start = point2samplelabel(stim_onsetoffsetid(do(o),1),dt,t(1));
-		if do(o)<numel(stimids),
+		if do(o)<size(stim_onsetoffsetid,1),
 			sample_stop = point2samplelabel(stim_onsetoffsetid(do(o)+1,1)-dt-vm_baseline_correct,dt,t(1));
 		else,
 			sample_stop = min(point2samplelabel(stim_onsetoffsetid(do(o),2)+median_ISI,dt,t(1)),numel(vm));
@@ -154,4 +164,12 @@ for s = 1:numel(stimids),
 	end
 end
 
+% now sort by time
+
+[timepoints, sortedindexes] = sort(timepoints);
+v = v(sortedindexes);
+fr = fr(sortedindexes);
+stimid = stimid(sortedindexes);
+
 vm_baselinesubtracted = vm;
+

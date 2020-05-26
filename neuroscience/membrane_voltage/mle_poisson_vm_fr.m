@@ -48,6 +48,11 @@ switch lower(fit_function),
 		upper_bounds = [10*max(fr)];
 		rateFunc = 'linepowerthreshold';
 		fitfun = @(x) -poisson_vm_fr(vm,fr,deltaT,rateFunc, {1 x(1) 0 1});
+	case 'linearthreshold',
+		lower_bounds = [0 0];
+		upper_bounds = [10*max(fr)/max(vm) max(vm)] ;
+		rateFunc = 'linepowerthreshold';
+		fitfun = @(x) -poisson_vm_fr(vm,fr,deltaT,rateFunc, {x(1) eps x(2) 1});
 	case 'linepowerthreshold',
 		lower_bounds = [0 0 0.5];
 		upper_bounds = [10*max(fr)/max(vm) max(vm) 5] ;
